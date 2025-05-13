@@ -81,6 +81,7 @@ export const login = (req, res) => {
         [username, password],
         (error, results) => {
             if (error) {
+                console.error("Login error:", error);
                 res.status(500).json({msg: error, users: []});
                 return;
             }

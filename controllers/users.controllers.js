@@ -1,4 +1,5 @@
-import { pool } from '../DB/db.js';
+import { pool } from '../DB/DB.js';
+import * as HashService from '../hash.js';
 
 export const getUsers = (req, res) => {
     pool.query('SELECT * FROM users', (error, results) =>{
@@ -19,18 +20,19 @@ export const getUser = (req, res) => {
         res.status(200).json({msg: "Ok", users: results});
     });
 };
-
-export const postUser = (req, res) => {
-    const{username, password} = req.body;
+export async function postUser(req, res){
+    const{name, username, password, age} = req.body;
+    const salt = HashService.getSalt();
+    const hash = await HashService.encryptPassword(password, salt);
+    const hash_password = salt + hash;
     pool.execute(
-        "INSERT INTO users (name, username, password, age, email) VALUES (?,?,?,?,?)",
-        [name, username, password, age],
+        "INSERT INTO users (name, username, password, age) VALUES (?,?,?,?)",
+        [name, username, hash_password, age],
         (error, results) => {
             if (error) {
                 res.status(500).json({msg: error, users: []});
                 return;
             }
-            res.status(200).json({msg: "Ok", users: results});
         }
     );
     pool.execute(
@@ -74,18 +76,18 @@ export const deleteUser = (req, res) => {
         }
     );
 };
-export const login = (req, res) => {
-    const {username, password} = req.body;
-    pool.execute(
-        "SELECT * FROM users WHERE username = ? AND password = ?",
-        [username, password],
-        (error, results) => {
-            if (error) {
-                console.error("Login error:", error);
-                res.status(500).json({msg: error, users: []});
-                return;
-            }
-            res.status(200).json({msg: "Ok", users: results});
+export async function login(req, res){
+    try{
+        const {username, password} = req.body;
+        console.log(req.body);
+        const user = await HashService.isValidUser(username, password);
+
+        if(!user){
+            return res.status(401).json({message: 'Invalid credentials'});
         }
-    );
-};
+        return res.status(200).json({message: 'Login successful', user});
+    }catch (error){
+        console.error(error);
+        return res.status(500).json({message: 'Server error'});
+    }
+}

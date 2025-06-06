@@ -10,21 +10,27 @@ export const getUsers = (req, res) => {
         res.status(200).json({ msg: "Ok", users: results}); // results contains rows returned by server
     });
 };
-export const getUser = (req, res) => {
-    const id = req.params.id;
-    pool.execute("Select ¨* from users where id = ?", [id], (error, results) => {
-        if (error) {
-            res.status(500).json({msg: error, users: []});
-            return;
-        }
-        res.status(200).json({msg: "Ok", users: results});
-    });
-};
+
+//modificar funcion 
+    export const getUser = (req, res) => {
+        const id = req.query.id;
+        pool.execute("Select * from users where id = ?", [id], (error, results) => {
+            if (error) {
+                res.status(500).json({msg: error, users: []});
+                return;
+            }
+            res.status(200).json({msg: "Ok", users: results});
+        });
+    };
+
+
 export async function postUser(req, res){
-    const{name, username, password, age} = req.body;
+    const {name, username, password, age} = req.body;
     const salt = HashService.getSalt();
     const hash = await HashService.encryptPassword(password, salt);
     const hash_password = salt + hash;
+    
+    // Primero INSERT, luego SELECT
     pool.execute(
         "INSERT INTO users (name, username, password, age) VALUES (?,?,?,?)",
         [name, username, hash_password, age],
@@ -33,17 +39,19 @@ export async function postUser(req, res){
                 res.status(500).json({msg: error, users: []});
                 return;
             }
-        }
-    );
-    pool.execute(
-        "select * from users where Username = ?",
-        [username],
-        (error, results) => {
-            if (error) {
-                res.status(500).json({msg: error, users: []});
-                return;
-            }
-            res.status(200).json({msg: "Ok", users: results});
+            
+            // Solo si INSERT fue exitoso, hacer SELECT
+            pool.execute(
+                "SELECT * FROM users WHERE username = ?",
+                [username],
+                (error, results) => {
+                    if (error) {
+                        res.status(500).json({msg: error, users: []});
+                        return;
+                    }
+                    res.status(200).json({msg: "Ok", users: results});
+                }
+            );
         }
     );
 };
@@ -91,3 +99,39 @@ export async function login(req, res){
         return res.status(500).json({message: 'Server error'});
     }
 }
+
+export const guardarPuntuacion = (req, res) => {
+    const id = req.query.id;
+    const puntuacion = req.body.puntuacion;
+    
+    // Validar que el id y puntuacion existen
+    if (!id) {
+        return res.status(400).json({ message: "ID de usuario requerido en query params" });
+    }
+    
+    if (puntuacion === undefined || puntuacion === null) {
+        return res.status(400).json({ message: "Puntuacion is required" });
+    }
+    
+    pool.execute(
+        "UPDATE users SET puntuación = ? WHERE id = ?",
+        [puntuacion, id],
+        (error, results) => {
+            if (error) {
+                console.error("Error al guardar puntuación:", error);
+                res.status(500).json({ message: "Error interno del servidor", error: error });
+                return;
+            }
+            
+            if (results.affectedRows === 0) {
+                return res.status(404).json({ message: "Usuario no encontrado" });
+            }
+            
+            res.status(200).json({ 
+                message: "Puntuación guardada correctamente", 
+                userId: id,
+                puntuacion: puntuacion
+            });
+        }
+    );
+};
